@@ -90,9 +90,11 @@ def main(
     for i in range(0, len(chunks), max_batch_size):
         batches.append((theories[i:i + max_batch_size], chunks[i:i + max_batch_size]))
 
+    with open("result", "w") as f:
+        pass
     for (theories, prompts) in batches:
         results = generator.generate(
-            prompts, max_gen_len=10, temperature=temperature, top_p=top_p
+            prompts, max_gen_len=2, temperature=temperature, top_p=top_p
         )
         res = list()
         for theory, prompt, result in zip(theories, prompts, results):
