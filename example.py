@@ -8,6 +8,7 @@ import torch
 import fire
 import time
 import json
+import gzip
 
 from pathlib import Path
 
@@ -30,12 +31,12 @@ def setup_model_parallel() -> Tuple[int, int]:
 
 
 def load(
-    ckpt_dir: str,
-    tokenizer_path: str,
-    local_rank: int,
-    world_size: int,
-    max_seq_len: int,
-    max_batch_size: int,
+        ckpt_dir: str,
+        tokenizer_path: str,
+        local_rank: int,
+        world_size: int,
+        max_seq_len: int,
+        max_batch_size: int,
 ) -> LLaMA:
     start_time = time.time()
     checkpoints = sorted(Path(ckpt_dir).glob("*.pth"))
@@ -64,13 +65,19 @@ def load(
 
 
 def main(
-    ckpt_dir: str,
-    tokenizer_path: str,
-    temperature: float = 0.8,
-    top_p: float = 0.95,
-    max_seq_len: int = 512,
-    max_batch_size: int = 32,
+        ckpt_dir: str,
+        tokenizer_path: str,
+        temperature: float = 0.7,
+        top_p: float = 0,
+        max_seq_len: int = 2048,
+        max_batch_size: int = 32,
 ):
+    with gzip.open("chunks.gz", "rb") as f:
+        chunks = [line.decode("utf-8").replace("\\n", "\n") for line in f]
+
+    with gzip.open("theories.gz", "rb") as f:
+        theories = [line.decode("utf-8") for line in f]
+
     local_rank, world_size = setup_model_parallel()
     if local_rank > 0:
         sys.stdout = open(os.devnull, "w")
@@ -79,40 +86,22 @@ def main(
         ckpt_dir, tokenizer_path, local_rank, world_size, max_seq_len, max_batch_size
     )
 
-    prompts = [
-        # For these prompts, the expected answer is the natural continuation of the prompt
-        "I believe the meaning of life is",
-        "Simply put, the theory of relativity states that ",
-        "Building a website can be done in 10 simple steps:\n",
-        # Few shot prompts: https://huggingface.co/blog/few-shot-learning-gpt-neo-and-inference-api
-        """Tweet: "I hate it when my phone battery dies."
-Sentiment: Negative
-###
-Tweet: "My day has been 👍"
-Sentiment: Positive
-###
-Tweet: "This is the link to the article"
-Sentiment: Neutral
-###
-Tweet: "This new music video was incredibile"
-Sentiment:""",
-        """Translate English to French:
+    batch_size = max_batch_size * 100
+    batches = []
+    for i in range(0, len(chunks), batch_size):
+        batches.append(zip(theories[i:i + batch_size], chunks[i:i + batch_size]))
 
-sea otter => loutre de mer
+    res = list()
+    for (theories, prompts) in batches:
+        results = generator.generate(
+            prompts, max_gen_len=3, temperature=temperature, top_p=top_p
+        )
+        for theory, result in zip(theories, results):
+            res.append(result)
+            print(theory + ": " + result)
 
-peppermint => menthe poivrée
-
-plush girafe => girafe peluche
-
-cheese =>""",
-    ]
-    results = generator.generate(
-        prompts, max_gen_len=256, temperature=temperature, top_p=top_p
-    )
-
-    for result in results:
-        print(result)
-        print("\n==================================\n")
+    with gzip.open("result.gz", "wb") as f:
+        f.write("\n".join(res).encode())
 
 
 if __name__ == "__main__":
