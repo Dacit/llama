@@ -70,7 +70,7 @@ def main(
         temperature: float = 0.8,
         top_p: float = 0.95,
         max_seq_len: int = 2048,
-        max_batch_size: int = 8,
+        max_batch_size: int = 16,
 ):
     with gzip.open("chunks.gz", "rb") as f:
         chunks = [line.decode("utf-8").rstrip("\n").replace("\\n", "\n") for line in f]
@@ -92,7 +92,7 @@ def main(
 
     for (theories, prompts) in batches:
         results = generator.generate(
-            prompts, max_gen_len=5, temperature=temperature, top_p=top_p
+            prompts, max_gen_len=10, temperature=temperature, top_p=top_p
         )
         res = list()
         for theory, prompt, result in zip(theories, prompts, results):
