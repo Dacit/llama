@@ -86,12 +86,13 @@ def main(
         ckpt_dir, tokenizer_path, local_rank, world_size, max_seq_len, max_batch_size
     )
 
+    with open("result", "r") as f:
+        start = len([line for line in f if not line.strip() == ""])
+
     batches = []
-    for i in range(0, len(chunks), max_batch_size):
+    for i in range(start, len(chunks), max_batch_size):
         batches.append((theories[i:i + max_batch_size], chunks[i:i + max_batch_size]))
 
-    with open("result", "w") as f:
-        pass
     for (theories, prompts) in batches:
         results = generator.generate(
             prompts, max_gen_len=2, temperature=temperature, top_p=top_p
