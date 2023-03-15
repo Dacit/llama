@@ -67,16 +67,16 @@ def load(
 def main(
         ckpt_dir: str,
         tokenizer_path: str,
-        temperature: float = 0.7,
-        top_p: float = 0,
+        temperature: float = 0.8,
+        top_p: float = 0.95,
         max_seq_len: int = 2048,
-        max_batch_size: int = 32,
+        max_batch_size: int = 8,
 ):
     with gzip.open("chunks.gz", "rb") as f:
-        chunks = [line.decode("utf-8").replace("\\n", "\n") for line in f]
+        chunks = [line.decode("utf-8").rstrip("\n").replace("\\n", "\n") for line in f]
 
-    with gzip.open("theories.gz", "rb") as f:
-        theories = [line.decode("utf-8") for line in f]
+    with gzip.open("thy_names.gz", "rb") as f:
+        theories = [line.decode("utf-8").strip() for line in f]
 
     local_rank, world_size = setup_model_parallel()
     if local_rank > 0:
@@ -86,22 +86,21 @@ def main(
         ckpt_dir, tokenizer_path, local_rank, world_size, max_seq_len, max_batch_size
     )
 
-    batch_size = max_batch_size * 100
     batches = []
-    for i in range(0, len(chunks), batch_size):
-        batches.append(zip(theories[i:i + batch_size], chunks[i:i + batch_size]))
+    for i in range(0, len(chunks), max_batch_size):
+        batches.append((theories[i:i + max_batch_size], chunks[i:i + max_batch_size]))
 
-    res = list()
     for (theories, prompts) in batches:
         results = generator.generate(
             prompts, max_gen_len=3, temperature=temperature, top_p=top_p
         )
-        for theory, result in zip(theories, results):
-            res.append(result)
-            print(theory + ": " + result)
-
-    with gzip.open("result.gz", "wb") as f:
-        f.write("\n".join(res).encode())
+        res = list()
+        for theory, prompt, result in zip(theories, prompts, results):
+            score = result[len(prompt):]
+            res.append(score)
+            print(theory + ": " + score)
+        with open("result", "a") as f:
+            f.write("\n".join(res) + "\n")
 
 
 if __name__ == "__main__":
