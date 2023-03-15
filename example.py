@@ -92,11 +92,11 @@ def main(
 
     for (theories, prompts) in batches:
         results = generator.generate(
-            prompts, max_gen_len=3, temperature=temperature, top_p=top_p
+            prompts, max_gen_len=5, temperature=temperature, top_p=top_p
         )
         res = list()
         for theory, prompt, result in zip(theories, prompts, results):
-            score = result[len(prompt):]
+            score = result[len(prompt):].replace("\n", "")
             res.append(score)
             print(theory + ": " + score)
         with open("result", "a") as f:
